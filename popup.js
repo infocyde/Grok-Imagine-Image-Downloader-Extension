@@ -128,17 +128,15 @@ scanBtn.addEventListener('click', async () => {
   scanBtn.disabled = false;
 });
 
-// Helper: convert a src (data URI or http URL) to a Uint8Array
+// Fetch a src (data URI or http URL) and return its raw bytes.
+// Works for cross-origin http URLs because the popup is an extension page and
+// imagine-public.x.ai is declared in host_permissions, which exempts the
+// request from CORS (the image CDN sends no Access-Control-Allow-Origin).
 async function srcToBytes(src) {
-  if (src.startsWith('data:')) {
-    const response = await fetch(src);
-    const blob = await response.blob();
-    return new Uint8Array(await blob.arrayBuffer());
-  } else {
-    const response = await fetch(src);
-    const blob = await response.blob();
-    return new Uint8Array(await blob.arrayBuffer());
-  }
+  const response = await fetch(src);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const blob = await response.blob();
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 downloadBtn.addEventListener('click', async () => {
@@ -163,10 +161,17 @@ downloadBtn.addEventListener('click', async () => {
         completed++;
       } catch (e) {
         failed++;
-        console.error('Failed to add image:', e);
+        console.error('Failed to add image:', img.src, e);
       }
 
       status.textContent = `Zipping ${completed}/${foundImages.length}${failed ? ` (${failed} failed)` : ''}...`;
+    }
+
+    if (completed === 0) {
+      status.textContent = `❌ No images could be fetched (${failed} failed).`;
+      downloadBtn.disabled = false;
+      scanBtn.disabled = false;
+      return;
     }
 
     status.textContent = `Generating ZIP file...`;

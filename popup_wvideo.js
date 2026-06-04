@@ -176,67 +176,56 @@ scanBtn.addEventListener('click', async () => {
   scanBtn.disabled = false;
 });
 
-async function fetchBytes(url) {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return new Uint8Array(await blob.arrayBuffer());
+async function downloadMedia(item, filename) {
+  if (item.src.startsWith('data:')) {
+    const response = await fetch(item.src);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    try {
+      await chrome.downloads.download({
+        url: blobUrl,
+        filename,
+        conflictAction: 'uniquify',
+      });
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    }
+  } else {
+    await chrome.downloads.download({
+      url: item.src,
+      filename,
+      conflictAction: 'uniquify',
+    });
+  }
 }
 
 downloadBtn.addEventListener('click', async () => {
   if (foundMedia.length === 0) return;
 
-  status.textContent = `Zipping ${foundMedia.length} files...`;
+  status.textContent = `Downloading ${foundMedia.length} files...`;
   downloadBtn.disabled = true;
   scanBtn.disabled = true;
 
-  try {
-    const zip = new JSZip();
-    let completed = 0;
-    let failed = 0;
+  let completed = 0;
+  let failed = 0;
 
-    for (let i = 0; i < foundMedia.length; i++) {
-      const item = foundMedia[i];
-      const ext = item.kind === 'video' ? 'mp4' : 'jpg';
-      const filename = `grok-imagine-${String(i + 1).padStart(3, '0')}.${ext}`;
+  for (let i = 0; i < foundMedia.length; i++) {
+    const item = foundMedia[i];
+    const ext = item.kind === 'video' ? 'mp4' : 'jpg';
+    const filename = `grok-imagine-${String(i + 1).padStart(3, '0')}.${ext}`;
 
-      try {
-        const bytes = await fetchBytes(item.src);
-        zip.file(filename, bytes);
-        completed++;
-      } catch (e) {
-        failed++;
-        console.error('Failed to add file:', e);
-      }
-
-      status.textContent = `Zipping ${completed}/${foundMedia.length}${failed ? ` (${failed} failed)` : ''}...`;
+    try {
+      await downloadMedia(item, filename);
+      completed++;
+    } catch (e) {
+      failed++;
+      console.error('Failed to download file:', item.src, e);
     }
 
-    status.textContent = `Generating ZIP file...`;
-
-    const zipBlob = await zip.generateAsync(
-      { type: 'blob', compression: 'STORE' },
-      (metadata) => {
-        status.textContent = `Generating ZIP... ${Math.round(metadata.percent)}%`;
-      }
-    );
-
-    const blobUrl = URL.createObjectURL(zipBlob);
-    const sizeMB = (zipBlob.size / (1024 * 1024)).toFixed(1);
-
-    await chrome.downloads.download({
-      url: blobUrl,
-      filename: `grok-images.zip`,
-      conflictAction: 'uniquify',
-    });
-
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-
-    status.textContent = `✅ Done! ${completed} files zipped (${sizeMB} MB)${failed ? `, ${failed} failed` : ''}.`;
-  } catch (e) {
-    status.textContent = `❌ ZIP creation failed: ${e.message}`;
-    console.error(e);
+    status.textContent = `Downloading ${completed}/${foundMedia.length}${failed ? ` (${failed} failed)` : ''}...`;
   }
 
+  status.textContent = `✅ Download requested for ${completed} files${failed ? `, ${failed} failed` : ''}.`;
   downloadBtn.disabled = false;
   scanBtn.disabled = false;
 });

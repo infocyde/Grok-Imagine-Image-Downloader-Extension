@@ -4,6 +4,11 @@
   "version": "1.0",
   "description": "Download all currently loaded images from Grok Imagine",
   "permissions": ["activeTab", "downloads", "scripting"],
+  "host_permissions": [
+    "https://imagine-public.x.ai/*",
+    "https://*.x.ai/*",
+    "https://grok.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
